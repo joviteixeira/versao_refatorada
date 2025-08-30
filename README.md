@@ -126,9 +126,6 @@ classDiagram
     direction LR
 
     subgraph domain
-        Customer "1" <-- "many" Order
-        Order "*" o-- "1..*" OrderItem
-
         class Customer {
             +id: int
             +name: str
@@ -148,30 +145,88 @@ classDiagram
             +price: float
         }
 
-        class RepositoryPort { <<Interface>> }
-        class EmailServicePort { <<Interface>> }
-        class PricingServicePort { <<Interface>> }
+        class RepositoryPort {
+            <<Interface>>
+            +save_customer(c: Customer)
+            +list_customers() List~Customer~
+            +get_customer(cid: int) Customer
+            +save_order(o: Order)
+            +list_orders() List~Order~
+        }
+        class EmailServicePort {
+            <<Interface>>
+            +send(to, subject, body)
+        }
+        class PricingServicePort {
+            <<Interface>>
+            +compute_total(items: List~OrderItem~) float
+        }
+        class CustomerServicePort {
+            <<Interface>>
+            +add_customer(name, email, phone) int
+            +list_customers() List~Customer~
+        }
+        class OrderServicePort {
+            <<Interface>>
+            +create_order(customer_id, items) int
+            +list_orders() List~Order~
+        }
     end
 
     subgraph services
-        class CustomerService { -repo: RepositoryPort }
-        class OrderService { -repo: RepositoryPort }
-        class PricingService { }
+        class CustomerService {
+            -repo: RepositoryPort
+            -email: EmailServicePort
+            +add_customer(name, email, phone)
+        }
+        class OrderService {
+            -repo: RepositoryPort
+            -pricing: PricingServicePort
+            +create_order(customer_id, items)
+        }
+        class PricingService {
+            +compute_total(items)
+        }
     end
 
     subgraph infrastructure
-        class CsvRepository { }
-        class ConsoleEmailService { }
+        class CsvRepository {
+            -data_dir: str
+            +save_customer(c: Customer)
+            +list_customers()
+        }
+        class ConsoleEmailService {
+            -host: str
+            -port: int
+            +send(to, subject, body)
+        }
     end
 
     subgraph app
-      class ServiceLocator { +resolve(key) }
-      class CLI { }
+      class ServiceLocator {
+        +resolve(key)
+        +register_singleton(key, instance)
+      }
+      class CLI {
+        +main()
+      }
     end
+
+    CustomerService ..|> CustomerServicePort
+    OrderService ..|> OrderServicePort
+    PricingService ..|> PricingServicePort
 
     CsvRepository ..|> RepositoryPort
     ConsoleEmailService ..|> EmailServicePort
+
     CustomerService o-- RepositoryPort
+    CustomerService o-- EmailServicePort
     OrderService o-- RepositoryPort
-    CLI --> ServiceLocator
+    OrderService o-- PricingServicePort
+
+    CLI --> ServiceLocator : uses
+    ServiceLocator --> CustomerService : creates
+    ServiceLocator --> OrderService : creates
+    ServiceLocator --> CsvRepository : creates
+    ServiceLocator --> ConsoleEmailService : creates
 ```
